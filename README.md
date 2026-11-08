@@ -5,10 +5,14 @@ This component helps with Wi-Fi connection for the device.
 It first tries to connect to a Wi-Fi network using the credentials stored in the flash. If this fails, it starts an access point and a web server to allow the user to connect to a Wi-Fi network.
 
 The URL to access the web server is `http://192.168.4.1`.
+### Screenshot: Wi-Fi Configuration v4.0.0
+<img src="assets/ap_v4_0.png" width="320" alt="Wi-Fi Configuration v4.0.0">
 
-### Screenshot: Wi-Fi Configuration v3.2
+## Changelog: v4.0.0
 
-<img src="assets/ap_v3_2.jpg" width="320" alt="Wi-Fi Configuration v3.2">
+- Friendly conversational pairing UIUX full rework, with emote incoperated
+- Developed an offline testing server powered by flask, to facilitate UIUX development
+
 
 ## Changelog: v3.3.1
 

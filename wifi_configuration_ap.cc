@@ -25,7 +25,6 @@
 #define WIFI_FAIL_BIT      BIT1
 
 extern const char index_html_start[] asm("_binary_wifi_configuration_html_start");
-extern const char done_html_start[] asm("_binary_wifi_configuration_done_html_start");
 
 WifiConfigurationAp::WifiConfigurationAp()
 {
@@ -424,19 +423,6 @@ void WifiConfigurationAp::StartWebServer()
         .user_ctx = this
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server_, &form_submit));
-
-    // Register the done.html page
-    httpd_uri_t done_html = {
-        .uri = "/done.html",
-        .method = HTTP_GET,
-        .handler = [](httpd_req_t *req) -> esp_err_t {
-            httpd_resp_set_hdr(req, "Connection", "close");
-            httpd_resp_send(req, done_html_start, strlen(done_html_start));
-            return ESP_OK;
-        },
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server_, &done_html));
 
     // Register the exit endpoint - exits config mode without rebooting
     httpd_uri_t exit_config = {
