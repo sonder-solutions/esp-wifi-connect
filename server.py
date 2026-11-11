@@ -54,7 +54,7 @@ def generate_networks():
             results.append({
                 'ssid': network['ssid'],
                 'rssi': rssi,
-                'auth': network['auth']
+                'authmode': network['auth']
             })
 
     return results
@@ -63,6 +63,16 @@ saved_networks = [
     {'ssid': 'HomeNetwork', 'password': 'inspirare'},
     {'ssid': 'Office_5G', 'password': 'work123'}
 ]
+
+# Mirrors the device's /advanced/config fields; the show_* flags come from WifiManagerConfig
+advanced_config = {
+    'ota_url': '',
+    'max_tx_power': 80,
+    'remember_bssid': False,
+    'sleep_mode': True,
+    'show_ota_config': True,
+    'show_sleep_config': True
+}
 
 @app.route('/scan')
 def get_networks():
@@ -124,6 +134,24 @@ def submit():
             'success': False,
             'error': 'Connection failed. Wrong password.'
         }), 401
+
+@app.route('/advanced/config')
+def get_advanced_config():
+    """Return advanced settings; like the device, ota_url is omitted when unset"""
+    config = dict(advanced_config)
+    if not config['ota_url']:
+        del config['ota_url']
+    return jsonify(config)
+
+@app.route('/advanced/submit', methods=['POST'])
+def submit_advanced_config():
+    """Save the advanced settings present in the request; absent keys keep their value"""
+    data = request.get_json()
+    print(f'Advanced settings: {data}')
+    for key in ('ota_url', 'max_tx_power', 'remember_bssid', 'sleep_mode'):
+        if key in data:
+            advanced_config[key] = data[key]
+    return jsonify({'success': True})
 
 @app.route('/exit', methods=['POST'])
 def exit_config():

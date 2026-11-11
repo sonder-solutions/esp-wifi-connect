@@ -384,7 +384,8 @@
             font-weight: 500;
             color: var(--text-muted);
         }
-        .input-group input {
+        .input-group input,
+        .input-group select {
             width: 100%;
             padding: 11px 12px;
             font-size: 15px;
@@ -395,7 +396,8 @@
             outline: none;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .input-group input:focus {
+        .input-group input:focus,
+        .input-group select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-soft);
         }
@@ -985,7 +987,14 @@ const translations = {
         default_set: "Default network updated!",
         config_success: "Configuration successful!",
         delete_title: "Delete Saved Networks",
-        set_default_title: "Set Default WiFi"
+        set_default_title: "Set Default WiFi",
+        advanced: "Advanced",
+        ota_url: "Custom OTA URL",
+        max_tx_power: "Wi-Fi Max TX Power",
+        remember_bssid: "Remember BSSID when connecting to Wi-Fi",
+        sleep_mode: "Enable Sleep Mode",
+        save: "Save",
+        settings_failed: "Something went wrong. Please try again."
     },
     'zh-CN': {
         welcome: "帮帮我！我没有网络。",
@@ -1015,7 +1024,14 @@ const translations = {
         default_set: "默认网络已更新！",
         config_success: "配置成功！",
         delete_title: "删除已保存的网络",
-        set_default_title: "设置默认WiFi"
+        set_default_title: "设置默认WiFi",
+        advanced: "高级选项",
+        ota_url: "自定义 OTA 地址",
+        max_tx_power: "Wi-Fi 最大发射功率",
+        remember_bssid: "连接 Wi-Fi 时记住 BSSID",
+        sleep_mode: "启用睡眠模式",
+        save: "保存",
+        settings_failed: "出了点问题，请重试。"
     },
     'zh-TW': {
         welcome: "幫幫我！我沒有網路。",
@@ -1045,7 +1061,14 @@ const translations = {
         default_set: "預設網路已更新！",
         config_success: "設定成功！",
         delete_title: "刪除已儲存的網路",
-        set_default_title: "設定預設WiFi"
+        set_default_title: "設定預設WiFi",
+        advanced: "進階選項",
+        ota_url: "自定義 OTA 位址",
+        max_tx_power: "Wi-Fi 最大發射功率",
+        remember_bssid: "連接 Wi-Fi 時記住 BSSID",
+        sleep_mode: "啟用睡眠模式",
+        save: "儲存",
+        settings_failed: "出了點問題，請重試。"
     },
     'ja-JP': {
         welcome: "助けて！インターネットがありません。",
@@ -1075,7 +1098,14 @@ const translations = {
         default_set: "デフォルトネットワークが更新されました！",
         config_success: "設定が完了しました！",
         delete_title: "保存済みネットワークを削除",
-        set_default_title: "デフォルトWiFiを設定"
+        set_default_title: "デフォルトWiFiを設定",
+        advanced: "詳細設定",
+        ota_url: "カスタムOTA URL",
+        max_tx_power: "Wi-Fi最大送信電力",
+        remember_bssid: "Wi-Fi接続時にBSSIDを記憶する",
+        sleep_mode: "スリープモードを有効にする",
+        save: "保存",
+        settings_failed: "問題が発生しました。もう一度お試しください。"
     },
     'ko-KR': {
         welcome: "도와주세요! 인터넷이 없어요.",
@@ -1105,7 +1135,14 @@ const translations = {
         default_set: "기본 네트워크가 업데이트되었습니다!",
         config_success: "설정이 완료되었습니다!",
         delete_title: "저장된 네트워크 삭제",
-        set_default_title: "기본 WiFi 설정"
+        set_default_title: "기본 WiFi 설정",
+        advanced: "고급",
+        ota_url: "사용자 정의 OTA URL",
+        max_tx_power: "Wi-Fi 최대 송신 전력",
+        remember_bssid: "Wi-Fi 연결 시 BSSID 기억",
+        sleep_mode: "절전 모드 활성화",
+        save: "저장",
+        settings_failed: "문제가 발생했습니다. 다시 시도해 주세요."
     },
     'es-ES': {
         welcome: "¡Ayuda! No tengo internet.",
@@ -1135,7 +1172,14 @@ const translations = {
         default_set: "¡Red predeterminada actualizada!",
         config_success: "¡Configuración exitosa!",
         delete_title: "Eliminar Redes Guardadas",
-        set_default_title: "Establecer WiFi Predeterminado"
+        set_default_title: "Establecer WiFi Predeterminado",
+        advanced: "Avanzado",
+        ota_url: "URL OTA personalizada",
+        max_tx_power: "Potencia máxima TX Wi-Fi",
+        remember_bssid: "Recordar BSSID al conectarse a Wi-Fi",
+        sleep_mode: "Activar modo de suspensión",
+        save: "Guardar",
+        settings_failed: "Algo salió mal. Inténtalo de nuevo."
     },
     'fr-FR': {
         welcome: "Aidez-moi ! Je n'ai pas d'internet.",
@@ -1165,7 +1209,14 @@ const translations = {
         default_set: "Réseau par défaut mis à jour !",
         config_success: "Configuration réussie !",
         delete_title: "Supprimer les Réseaux Enregistrés",
-        set_default_title: "Définir le WiFi par Défaut"
+        set_default_title: "Définir le WiFi par Défaut",
+        advanced: "Avancé",
+        ota_url: "URL OTA personnalisée",
+        max_tx_power: "Puissance TX maximale Wi-Fi",
+        remember_bssid: "Mémoriser le BSSID lors de la connexion au Wi-Fi",
+        sleep_mode: "Activer le mode veille",
+        save: "Enregistrer",
+        settings_failed: "Un problème est survenu. Veuillez réessayer."
     },
     'de-DE': {
         welcome: "Hilfe! Ich habe kein Internet.",
@@ -1195,7 +1246,14 @@ const translations = {
         default_set: "Standardnetzwerk aktualisiert!",
         config_success: "Konfiguration erfolgreich!",
         delete_title: "Gespeicherte Netzwerke Löschen",
-        set_default_title: "Standard-WiFi Festlegen"
+        set_default_title: "Standard-WiFi Festlegen",
+        advanced: "Erweitert",
+        ota_url: "Benutzerdefinierte OTA-URL",
+        max_tx_power: "Wi-Fi Max. Sendeleistung",
+        remember_bssid: "BSSID beim Verbinden mit Wi-Fi merken",
+        sleep_mode: "Schlafmodus aktivieren",
+        save: "Speichern",
+        settings_failed: "Etwas ist schiefgelaufen. Bitte erneut versuchen."
     },
     'it-IT': {
         welcome: "Aiuto! Non ho internet.",
@@ -1225,7 +1283,14 @@ const translations = {
         default_set: "Rete predefinita aggiornata!",
         config_success: "Configurazione riuscita!",
         delete_title: "Elimina Reti Salvate",
-        set_default_title: "Imposta WiFi Predefinito"
+        set_default_title: "Imposta WiFi Predefinito",
+        advanced: "Avanzate",
+        ota_url: "URL OTA personalizzato",
+        max_tx_power: "Potenza TX massima Wi-Fi",
+        remember_bssid: "Ricorda BSSID durante la connessione al Wi-Fi",
+        sleep_mode: "Abilita modalità sospensione",
+        save: "Salva",
+        settings_failed: "Qualcosa è andato storto. Riprova."
     },
     'pt-PT': {
         welcome: "Ajuda! Não tenho internet.",
@@ -1255,7 +1320,14 @@ const translations = {
         default_set: "Rede padrão atualizada!",
         config_success: "Configuração bem-sucedida!",
         delete_title: "Excluir Redes Salvas",
-        set_default_title: "Definir WiFi Padrão"
+        set_default_title: "Definir WiFi Padrão",
+        advanced: "Avançado",
+        ota_url: "URL OTA personalizado",
+        max_tx_power: "Potência TX máxima Wi-Fi",
+        remember_bssid: "Lembrar BSSID ao ligar ao Wi-Fi",
+        sleep_mode: "Ativar modo de suspensão",
+        save: "Guardar",
+        settings_failed: "Algo correu mal. Tente novamente."
     },
     'ru-RU': {
         welcome: "Помогите! У меня нет интернета.",
@@ -1285,7 +1357,14 @@ const translations = {
         default_set: "Сеть по умолчанию обновлена!",
         config_success: "Настройка успешна!",
         delete_title: "Удалить Сохраненные Сети",
-        set_default_title: "Установить WiFi по Умолчанию"
+        set_default_title: "Установить WiFi по Умолчанию",
+        advanced: "Дополнительно",
+        ota_url: "Пользовательский URL OTA",
+        max_tx_power: "Макс. мощность передачи Wi-Fi",
+        remember_bssid: "Запомнить BSSID при подключении к Wi-Fi",
+        sleep_mode: "Включить режим сна",
+        save: "Сохранить",
+        settings_failed: "Что-то пошло не так. Попробуйте ещё раз."
     },
     'ar-SA': {
         welcome: "مساعدة! ليس لدي إنترنت.",
@@ -1315,7 +1394,14 @@ const translations = {
         default_set: "تم تحديث الشبكة الافتراضية!",
         config_success: "تم التكوين بنجاح!",
         delete_title: "حذف الشبكات المحفوظة",
-        set_default_title: "تعيين WiFi الافتراضي"
+        set_default_title: "تعيين WiFi الافتراضي",
+        advanced: "خيارات متقدمة",
+        ota_url: "عنوان OTA مخصص",
+        max_tx_power: "أقصى قوة إرسال Wi-Fi",
+        remember_bssid: "تذكر BSSID عند الاتصال بـ Wi-Fi",
+        sleep_mode: "تمكين وضع السكون",
+        save: "حفظ",
+        settings_failed: "حدث خطأ ما. يرجى المحاولة مرة أخرى."
     },
     'hi-IN': {
         welcome: "मदद! मेरे पास इंटरनेट नहीं है।",
@@ -1345,7 +1431,14 @@ const translations = {
         default_set: "डिफ़ॉल्ट नेटवर्क अपडेट किया गया!",
         config_success: "कॉन्फ़िगरेशन सफल!",
         delete_title: "सहेजे गए नेटवर्क हटाएं",
-        set_default_title: "डिफ़ॉल्ट WiFi सेट करें"
+        set_default_title: "डिफ़ॉल्ट WiFi सेट करें",
+        advanced: "उन्नत",
+        ota_url: "कस्टम OTA URL",
+        max_tx_power: "Wi-Fi अधिकतम TX पावर",
+        remember_bssid: "Wi-Fi से कनेक्ट करते समय BSSID याद रखें",
+        sleep_mode: "स्लीप मोड सक्षम करें",
+        save: "सहेजें",
+        settings_failed: "कुछ गलत हो गया। कृपया पुनः प्रयास करें।"
     },
     'th-TH': {
         welcome: "ช่วยด้วย! ฉันไม่มีอินเทอร์เน็ต",
@@ -1375,7 +1468,14 @@ const translations = {
         default_set: "อัปเดตเครือข่ายเริ่มต้นแล้ว!",
         config_success: "กำหนดค่าสำเร็จ!",
         delete_title: "ลบเครือข่ายที่บันทึกไว้",
-        set_default_title: "ตั้งค่า WiFi เริ่มต้น"
+        set_default_title: "ตั้งค่า WiFi เริ่มต้น",
+        advanced: "ขั้นสูง",
+        ota_url: "URL OTA กำหนดเอง",
+        max_tx_power: "กำลังส่งสูงสุด Wi-Fi",
+        remember_bssid: "จำ BSSID เมื่อเชื่อมต่อกับ Wi-Fi",
+        sleep_mode: "เปิดใช้งานโหมดสลีป",
+        save: "บันทึก",
+        settings_failed: "เกิดข้อผิดพลาด โปรดลองอีกครั้ง"
     },
     'vi-VN': {
         welcome: "Giúp tôi! Tôi không có internet.",
@@ -1405,7 +1505,14 @@ const translations = {
         default_set: "Đã cập nhật mạng mặc định!",
         config_success: "Cấu hình thành công!",
         delete_title: "Xóa Mạng Đã Lưu",
-        set_default_title: "Đặt WiFi Mặc Định"
+        set_default_title: "Đặt WiFi Mặc Định",
+        advanced: "Tùy chọn nâng cao",
+        ota_url: "Địa chỉ OTA tùy chỉnh",
+        max_tx_power: "Công suất phát Wi-Fi tối đa",
+        remember_bssid: "Ghi nhớ BSSID khi kết nối với Wi-Fi",
+        sleep_mode: "Bật chế độ ngủ",
+        save: "Lưu",
+        settings_failed: "Đã xảy ra lỗi. Vui lòng thử lại."
     }
 };
 
@@ -1421,7 +1528,8 @@ const STATE = {
     FAILED: 'FAILED',
     SAVED_LIST_DELETE: 'SAVED_LIST_DELETE',
     SAVED_LIST_DEFAULT: 'SAVED_LIST_DEFAULT',
-    CONFIRM_DELETE: 'CONFIRM_DELETE'
+    CONFIRM_DELETE: 'CONFIRM_DELETE',
+    ADVANCED: 'ADVANCED'
 };
 
 let currentState = STATE.MAIN_MENU;
@@ -1433,6 +1541,13 @@ let momoFace = null;
 let savedNetworks = [];
 let apList = [];
 let refreshInterval = null;
+let advancedRenderId = 0;
+
+// Values are esp_wifi_set_max_tx_power() units (0.25 dBm)
+const TX_POWER_OPTIONS = [
+    [8, '2 dBm'], [20, '5 dBm'], [28, '7 dBm'], [34, '8 dBm'], [44, '11 dBm'], [52, '13 dBm'],
+    [56, '14 dBm'], [60, '15 dBm'], [66, '16 dBm'], [72, '18 dBm'], [80, '20 dBm']
+];
 
 // ========== Global References ==========
 const dialogArea = document.getElementById('dialogArea');
@@ -1547,6 +1662,9 @@ function renderState() {
         case STATE.CONFIRM_DELETE:
             renderConfirmDelete();
             break;
+        case STATE.ADVANCED:
+            renderAdvanced();
+            break;
     }
 }
 
@@ -1592,6 +1710,21 @@ function renderMainMenu() {
                         options.appendChild(button);
                     }, index * 200);
                 });
+
+                setTimeout(() => {
+                    const advancedLink = document.createElement('div');
+                    advancedLink.className = 'advanced-link fade-in';
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = t('advanced');
+                    link.onclick = (event) => {
+                        event.preventDefault();
+                        currentState = STATE.ADVANCED;
+                        renderState();
+                    };
+                    advancedLink.appendChild(link);
+                    dialogArea.appendChild(advancedLink);
+                }, buttons.length * 200);
             });
         }, 1000);
     });
@@ -1905,6 +2038,137 @@ function renderConfirmDelete() {
     });
 }
 
+function renderAdvanced() {
+    clearDialogue();
+    dialogArea.innerHTML = '';
+    const renderId = ++advancedRenderId;
+
+    showDialogue(t('advanced'), async () => {
+        const config = await loadAdvancedConfig();
+        // A language switch re-renders while the request is in flight; only the latest render draws
+        if (renderId !== advancedRenderId || currentState !== STATE.ADVANCED) return;
+
+        const error = document.createElement('div');
+        error.className = 'error-message';
+
+        const buttons = [];
+        if (config) {
+            appendAdvancedForm(config, error, buttons);
+        } else {
+            // Saving defaults over settings we could not read would wipe them, so offer only Back
+            momoFace.setEmotion('confused');
+            error.textContent = t('settings_failed');
+        }
+        dialogArea.appendChild(error);
+
+        buttons.push({ text: t('back'), action: () => {
+            currentState = STATE.MAIN_MENU;
+            renderState();
+        }});
+
+        const options = document.createElement('div');
+        options.className = 'options';
+        dialogArea.appendChild(options);
+
+        buttons.forEach((btn, index) => {
+            setTimeout(() => {
+                const button = document.createElement('button');
+                button.className = 'option-btn fade-in' + (btn.primary ? ' primary' : '');
+                button.textContent = btn.text;
+                button.onclick = btn.action;
+                options.appendChild(button);
+            }, index * 200);
+        });
+    });
+}
+
+function appendAdvancedForm(config, error, buttons) {
+    let otaInput = null;
+    if (config.show_ota_config) {
+        const group = document.createElement('div');
+        group.className = 'input-group fade-in';
+        group.style.marginTop = '16px';
+
+        const label = document.createElement('label');
+        label.htmlFor = 'otaUrlInput';
+        label.textContent = t('ota_url');
+        group.appendChild(label);
+
+        otaInput = document.createElement('input');
+        otaInput.type = 'url';
+        otaInput.id = 'otaUrlInput';
+        otaInput.maxLength = 255; // The device reads ota_url back into a 256-byte buffer
+        otaInput.autocomplete = 'off';
+        otaInput.spellcheck = false;
+        otaInput.setAttribute('autocapitalize', 'off');
+        otaInput.value = config.ota_url || '';
+        group.appendChild(otaInput);
+
+        dialogArea.appendChild(group);
+    }
+
+    const powerGroup = document.createElement('div');
+    powerGroup.className = 'input-group fade-in';
+
+    const powerLabel = document.createElement('label');
+    powerLabel.htmlFor = 'txPowerSelect';
+    powerLabel.textContent = t('max_tx_power');
+    powerGroup.appendChild(powerLabel);
+
+    const powerSelect = document.createElement('select');
+    powerSelect.id = 'txPowerSelect';
+    const powerOptions = TX_POWER_OPTIONS.slice();
+    const currentPower = config.max_tx_power;
+    const validPower = Number.isInteger(currentPower) && currentPower >= 8 && currentPower <= 84;
+    if (validPower && !powerOptions.some(([value]) => value === currentPower)) {
+        powerOptions.push([currentPower, `${currentPower / 4} dBm`]);
+        powerOptions.sort((a, b) => a[0] - b[0]);
+    }
+    powerOptions.forEach(([value, text]) => {
+        const option = document.createElement('option');
+        option.value = String(value);
+        option.textContent = text;
+        powerSelect.appendChild(option);
+    });
+    // An unknown current power stays unselected and is left out of the save
+    powerSelect.value = validPower ? String(currentPower) : '';
+    powerGroup.appendChild(powerSelect);
+    dialogArea.appendChild(powerGroup);
+
+    const bssidInput = appendCheckbox('rememberBssidInput', t('remember_bssid'), config.remember_bssid);
+    const sleepInput = config.show_sleep_config
+        ? appendCheckbox('sleepModeInput', t('sleep_mode'), config.sleep_mode)
+        : null;
+
+    buttons.push({ text: t('save'), primary: true, action: (event) => {
+        // Hidden fields are omitted so the device keeps their stored values
+        const payload = { remember_bssid: bssidInput.checked };
+        if (powerSelect.value !== '') payload.max_tx_power = parseInt(powerSelect.value, 10);
+        if (otaInput) payload.ota_url = otaInput.value.trim();
+        if (sleepInput) payload.sleep_mode = sleepInput.checked;
+        saveAdvancedConfig(payload, event.currentTarget, error);
+    }});
+}
+
+function appendCheckbox(id, text, checked) {
+    const group = document.createElement('div');
+    group.className = 'checkbox-group fade-in';
+
+    const label = document.createElement('label');
+    label.htmlFor = id;
+    label.textContent = text;
+    group.appendChild(label);
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = id;
+    input.checked = Boolean(checked);
+    group.appendChild(input);
+
+    dialogArea.appendChild(group);
+    return input;
+}
+
 // ========== API Functions ==========
 async function connectToNetwork(password) {
     currentState = STATE.CONNECTING;
@@ -1964,6 +2228,43 @@ async function setDefaultNetwork(index) {
         await loadSavedList();
     } catch (err) {
         console.error('Error setting default:', err);
+    }
+}
+
+async function loadAdvancedConfig() {
+    try {
+        const response = await fetch('/advanced/config');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (err) {
+        console.error('Error loading advanced config:', err);
+        return null;
+    }
+}
+
+async function saveAdvancedConfig(payload, saveButton, error) {
+    saveButton.disabled = true;
+    error.textContent = '';
+
+    try {
+        const response = await fetch('/advanced/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        // The device answers errors with plain text, which fails to parse here
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+
+        showToast(t('config_success'));
+        currentState = STATE.MAIN_MENU;
+        renderState();
+    } catch (err) {
+        console.error('Error saving advanced config:', err);
+        momoFace.setEmotion('confused');
+        error.textContent = t('settings_failed');
+        saveButton.disabled = false;
     }
 }
 
