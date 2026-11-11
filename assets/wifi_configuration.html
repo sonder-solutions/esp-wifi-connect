@@ -1588,13 +1588,19 @@ function showToast(message) {
 }
 
 // ========== Dialogue Bubble Typewriter ==========
+// Bumped by every new line, so a line still typing (and its callback) stops when replaced.
+// Without it, a scan that answers mid-"Scanning..." interleaves both lines in the bubble.
+let dialogueId = 0;
+
 function showDialogue(text, callback) {
+    const id = ++dialogueId;
     const bubble = document.getElementById('dialogueBubble');
     bubble.textContent = '';
     momoFace.setEmotion('speaking');
 
     let i = 0;
     function type() {
+        if (id !== dialogueId) return;
         if (i < text.length) {
             bubble.textContent += text.charAt(i);
             i++;
@@ -1602,6 +1608,7 @@ function showDialogue(text, callback) {
         } else {
             // Finish speaking, switch to curious
             setTimeout(() => {
+                if (id !== dialogueId) return;
                 momoFace.setEmotion('curious');
                 if (callback) callback();
             }, 500);
@@ -1611,6 +1618,7 @@ function showDialogue(text, callback) {
 }
 
 function clearDialogue() {
+    dialogueId++;
     const bubble = document.getElementById('dialogueBubble');
     bubble.textContent = '';
 }
@@ -1712,6 +1720,8 @@ function renderMainMenu() {
                 });
 
                 setTimeout(() => {
+                    // A tap on an option before this fires has already left the menu
+                    if (!options.isConnected) return;
                     const advancedLink = document.createElement('div');
                     advancedLink.className = 'advanced-link fade-in';
                     const link = document.createElement('a');

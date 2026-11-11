@@ -79,8 +79,7 @@ advanced_config = {
 
 @app.route('/scan')
 def get_networks():
-    """Simulate network scanning with 2s delay"""
-    time.sleep(2)
+    """Answer at once, like the device, which returns its cached scan results"""
     # Generate fresh random networks each scan
     networks = generate_networks()
     # Return in the format expected by the HTML
