@@ -474,6 +474,7 @@ void WifiConfigurationAp::StartWebServer()
     const char* captive_portal_urls[] = {
         "/hotspot-detect.html",    // Apple
         "/generate_204*",           // Android
+        "/generate204*",            // Android OEM variant without the underscore
         "/mobile/status.php",      // Android
         "/check_network_status.txt", // Windows
         "/ncsi.txt",              // Windows
