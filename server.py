@@ -1,10 +1,13 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, redirect
 import time
 import threading
 import random
 import string
 
 app = Flask(__name__)
+
+# The device's WifiManagerConfig.language
+DEVICE_LANGUAGE = 'en-US'
 
 # Persistent network pool - these networks persist across scans
 network_pool = []
@@ -54,7 +57,7 @@ def generate_networks():
             results.append({
                 'ssid': network['ssid'],
                 'rssi': rssi,
-                'auth': network['auth']
+                'authmode': network['auth']
             })
 
     return results
@@ -64,10 +67,19 @@ saved_networks = [
     {'ssid': 'Office_5G', 'password': 'work123'}
 ]
 
+# Mirrors the device's /advanced/config fields; the show_* flags come from WifiManagerConfig
+advanced_config = {
+    'ota_url': '',
+    'max_tx_power': 80,
+    'remember_bssid': False,
+    'sleep_mode': True,
+    'show_ota_config': True,
+    'show_sleep_config': True
+}
+
 @app.route('/scan')
 def get_networks():
-    """Simulate network scanning with 2s delay"""
-    time.sleep(2)
+    """Answer at once, like the device, which returns its cached scan results"""
     # Generate fresh random networks each scan
     networks = generate_networks()
     # Return in the format expected by the HTML
@@ -125,6 +137,24 @@ def submit():
             'error': 'Connection failed. Wrong password.'
         }), 401
 
+@app.route('/advanced/config')
+def get_advanced_config():
+    """Return advanced settings; like the device, ota_url is omitted when unset"""
+    config = dict(advanced_config)
+    if not config['ota_url']:
+        del config['ota_url']
+    return jsonify(config)
+
+@app.route('/advanced/submit', methods=['POST'])
+def submit_advanced_config():
+    """Save the advanced settings present in the request; absent keys keep their value"""
+    data = request.get_json()
+    print(f'Advanced settings: {data}')
+    for key in ('ota_url', 'max_tx_power', 'remember_bssid', 'sleep_mode'):
+        if key in data:
+            advanced_config[key] = data[key]
+    return jsonify({'success': True})
+
 @app.route('/exit', methods=['POST'])
 def exit_config():
     """Exit configuration mode and shutdown server"""
@@ -143,7 +173,9 @@ def exit_config():
 
 @app.route('/')
 def index():
-    """Serve the HTML configuration page"""
+    """Serve the HTML configuration page; like the device, default to its language"""
+    if 'lang' not in request.args:
+        return redirect('/?lang=' + DEVICE_LANGUAGE)
     return send_file('assets/wifi_configuration.html')
 
 if __name__ == '__main__':
