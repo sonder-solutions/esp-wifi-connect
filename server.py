@@ -1,10 +1,13 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, redirect
 import time
 import threading
 import random
 import string
 
 app = Flask(__name__)
+
+# The device's WifiManagerConfig.language
+DEVICE_LANGUAGE = 'en-US'
 
 # Persistent network pool - these networks persist across scans
 network_pool = []
@@ -171,7 +174,9 @@ def exit_config():
 
 @app.route('/')
 def index():
-    """Serve the HTML configuration page"""
+    """Serve the HTML configuration page; like the device, default to its language"""
+    if 'lang' not in request.args:
+        return redirect('/?lang=' + DEVICE_LANGUAGE)
     return send_file('assets/wifi_configuration.html')
 
 if __name__ == '__main__':

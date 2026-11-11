@@ -235,11 +235,29 @@ void WifiConfigurationAp::StartWebServer()
         .uri = "/",
         .method = HTTP_GET,
         .handler = [](httpd_req_t *req) -> esp_err_t {
+            auto *this_ = static_cast<WifiConfigurationAp *>(req->user_ctx);
+            // Without ?lang= the page follows the phone's language, so a typed-in
+            // address would ignore the device's; send it to the device language.
+            bool has_lang = false;
+            size_t query_len = httpd_req_get_url_query_len(req);
+            if (query_len > 0) {
+                std::string query(query_len + 1, '\0');
+                char lang[16];
+                has_lang = httpd_req_get_url_query_str(req, query.data(), query.size()) == ESP_OK &&
+                           httpd_query_key_value(query.c_str(), "lang", lang, sizeof(lang)) != ESP_ERR_NOT_FOUND;
+            }
+            if (!has_lang) {
+                std::string url = "/?lang=" + this_->language_;
+                httpd_resp_set_status(req, "302 Found");
+                httpd_resp_set_hdr(req, "Location", url.c_str());
+                httpd_resp_set_hdr(req, "Connection", "close");
+                return httpd_resp_send(req, NULL, 0);
+            }
             httpd_resp_set_hdr(req, "Connection", "close");
             httpd_resp_send(req, index_html_start, strlen(index_html_start));
             return ESP_OK;
         },
-        .user_ctx = NULL
+        .user_ctx = this
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server_, &index_html));
 
