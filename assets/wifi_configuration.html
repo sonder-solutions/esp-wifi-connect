@@ -572,7 +572,6 @@
                     </g>
                     <g id="backAccessories"></g>
                     <g id="eyeL"></g><g id="eyeR"></g>
-                    <g id="specialL" style="display:none"></g><g id="specialR" style="display:none"></g>
                     <g id="mouth"></g>
                     <g id="frontAccessories"></g>
                 </svg>
@@ -658,7 +657,6 @@ class MomoFace {
             const accessories = {};
             for (const key of Object.keys(accessoryLabels)) accessories[key] = source.accessories.includes(key) ? 1 : 0;
 
-            const isSpecialEye = source.left.kind === 'Heart' || source.left.kind === 'Star';
             const isRollEyes = source.left.kind === 'Roll';
 
             const leftEye = (name === 'loading') ? loadingRoll('left') : clone(source.left);
@@ -669,9 +667,7 @@ class MomoFace {
                 head: source.head, cheeks: visible ? 1 : 0, accessories,
                 angle: Math.atan2(dx, dy) * 180 / Math.PI, radius: Math.hypot(dx, dy),
                 offset: 0, eyeTrack: 0,
-                specialShape: name === 'excited' ? 'star' : 'heart',
-                specialScale: isSpecialEye ? 1 : 0,
-                mode: isSpecialEye ? 'special' : (isRollEyes && name === 'loading' ? 'loading' : 'eye'),
+                mode: isRollEyes && name === 'loading' ? 'loading' : 'eye',
                 emotion: name,
                 blinkScaleLeft: 1,
                 blinkScaleRight: 1
@@ -773,26 +769,15 @@ class MomoFace {
             const eyeCX = { left: 140.5, right: 350.0 };
             const eyeCY = 245.3;
 
-            const specialScale = clamp(frame.specialScale || 0, 0, 1);
-            const eyeScale = 1 - specialScale;
-            const showSpecial = specialScale > 0.02;
-            const showEyes = eyeScale > 0.02;
-
-            byId('eyeL').style.display = showEyes ? '' : 'none';
-            byId('eyeR').style.display = showEyes ? '' : 'none';
-            byId('specialL').style.display = showSpecial ? '' : 'none';
-            byId('specialR').style.display = showSpecial ? '' : 'none';
-
+            // Star eyes are ordinary eye features (the eye graph morphs Round into Star).
             for (const [id, side] of [['eyeL', 'left'], ['eyeR', 'right']]) {
-                const cx = eyeCX[side], cy = eyeCY;
-                byId(id).setAttribute('transform',
-                    `translate(${eyeTX(side)} ${y}) translate(${cx} ${cy}) scale(${eyeScale}) translate(${-cx} ${-cy})`);
+                byId(id).setAttribute('transform', `translate(${eyeTX(side)} ${y})`);
             }
 
             drawFeature(byId('eyeL'), frame.left);
             drawFeature(byId('eyeR'), frame.right);
 
-            if (frame.mode === 'loading' && frame.left.kind === 'Roll' && specialScale < 0.5) {
+            if (frame.mode === 'loading' && frame.left.kind === 'Roll') {
                 ensureLoadingOrbit();
                 const angle = loadingOrbitAngle();
                 const rollCX = { left: 146.6, right: 356.1 };
@@ -869,8 +854,6 @@ class MomoFace {
                     head: colorMix(from.head, target.head, t), cheeks: lerp(from.cheeks, target.cheeks, t),
                     accessories: {}, angle: lerp(from.angle, target.angle, t), offset: lerp(from.offset, target.offset, t),
                     radius: lerp(from.radius, target.radius, t), eyeTrack: lerp(from.eyeTrack, target.eyeTrack, t),
-                    specialShape: t < 0.5 ? from.specialShape : target.specialShape,
-                    specialScale: lerp(from.specialScale || 0, target.specialScale || 0, t),
                     mode: t < 0.5 ? (from.mode || 'eye') : (target.mode || 'eye'),
                     emotion: target.emotion,
                     blinkScaleLeft: lerp(from.blinkScaleLeft || 1, target.blinkScaleLeft || 1, t),
