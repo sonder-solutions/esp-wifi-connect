@@ -1,18 +1,22 @@
 #include "wifi_configuration_ap.h"
-#include <cstdio>
-#include <memory>
-#include <freertos/FreeRTOS.h>
-#include <freertos/event_groups.h>
 #include <esp_err.h>
 #include <esp_event.h>
-#include <esp_wifi.h>
 #include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_netif.h>
+#include <esp_random.h>
+#include <esp_wifi.h>
+#include <cJSON.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/event_groups.h>
 #include <lwip/ip_addr.h>
+#include <lwip/sockets.h>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <cJSON.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <memory>
 #if !CONFIG_IDF_TARGET_ESP32P4
 #include <esp_smartconfig.h>
 #endif
@@ -25,6 +29,37 @@
 #define WIFI_FAIL_BIT      BIT1
 
 extern const char index_html_start[] asm("_binary_wifi_configuration_html_start");
+
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+namespace {
+
+esp_err_t AcceptSetupSocket(httpd_handle_t, int fd) {
+    // The AP owns this address. Filter the accepted socket so the HTTP server
+    // can start before the asynchronous AP netif start event is handled.
+    sockaddr_storage local{};
+    socklen_t size = sizeof(local);
+    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &size) != 0) {
+        return ESP_FAIL;
+    }
+    const auto target = inet_addr("192.168.4.1");
+    if (local.ss_family == AF_INET) {
+        const auto* ipv4 = reinterpret_cast<const sockaddr_in*>(&local);
+        return ipv4->sin_addr.s_addr == target ? ESP_OK : ESP_FAIL;
+    }
+#if CONFIG_LWIP_IPV6
+    if (local.ss_family == AF_INET6) {
+        const auto* ipv6 = reinterpret_cast<const sockaddr_in6*>(&local);
+        if (IN6_IS_ADDR_V4MAPPED(&ipv6->sin6_addr) &&
+            std::memcmp(&ipv6->sin6_addr.s6_addr[12], &target, sizeof(target)) == 0) {
+            return ESP_OK;
+        }
+    }
+#endif
+    return ESP_FAIL;
+}
+
+}  // namespace
+#endif
 
 WifiConfigurationAp::WifiConfigurationAp()
 {
@@ -41,7 +76,7 @@ std::vector<wifi_ap_record_t> WifiConfigurationAp::GetAccessPoints()
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return ap_records_;
-}   
+}
 
 WifiConfigurationAp::~WifiConfigurationAp()
 {
@@ -88,7 +123,7 @@ void WifiConfigurationAp::Start()
 
     StartAccessPoint();
     StartWebServer();
-    
+
     // Start scan immediately
     esp_wifi_scan_start(nullptr, false);
     // Setup periodic WiFi scan timer.
@@ -135,7 +170,24 @@ void WifiConfigurationAp::StartAccessPoint()
 {
     // Note: esp_netif_init() and esp_wifi_init() should be called once before calling this method
     // WiFi driver is initialized by WifiManager::Initialize() and kept alive
-    
+
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+    // Start the radio without an AP so the hardware RNG has RF entropy before
+    // the setup password is generated and advertised.
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    uint8_t random[12];
+    esp_fill_random(random, sizeof(random));
+    ESP_ERROR_CHECK(esp_wifi_stop());
+
+    char password[2 * sizeof(random) + 1];
+    for (size_t i = 0; i < sizeof(random); ++i) {
+        std::snprintf(password + 2 * i, 3, "%02x", random[i]);
+    }
+    ap_password_ = password;
+#endif
+
     // Create the default WiFi AP interface
     ap_netif_ = esp_netif_create_default_wifi_ap();
 
@@ -161,6 +213,11 @@ void WifiConfigurationAp::StartAccessPoint()
     wifi_config.ap.ssid_len = ssid.length();
     wifi_config.ap.max_connection = 4;
     wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+    std::memcpy(wifi_config.ap.password, ap_password_.c_str(), ap_password_.size() + 1);
+    wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_config.ap.max_connection = 1;
+#endif
 
     // Start the WiFi Access Point
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
@@ -228,6 +285,9 @@ void WifiConfigurationAp::StartWebServer()
     // 5G Network takes longer to connect
     config.recv_wait_timeout = 15;
     config.send_wait_timeout = 15;
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+    config.open_fn = AcceptSetupSocket;
+#endif
     ESP_ERROR_CHECK(httpd_start(&server_, &config));
 
     // Register the index.html file
@@ -236,6 +296,17 @@ void WifiConfigurationAp::StartWebServer()
         .method = HTTP_GET,
         .handler = [](httpd_req_t *req) -> esp_err_t {
             auto *this_ = static_cast<WifiConfigurationAp *>(req->user_ctx);
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+            char host[32];
+            if (httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK ||
+                (std::strcmp(host, "192.168.4.1") != 0 &&
+                 std::strcmp(host, "192.168.4.1:80") != 0)) {
+                httpd_resp_set_status(req, "302 Found");
+                const auto url = this_->GetWebServerUrl();
+                httpd_resp_set_hdr(req, "Location", url.c_str());
+                return httpd_resp_send(req, nullptr, 0);
+            }
+#endif
             // Without ?lang= the page follows the phone's language, so a typed-in
             // address would ignore the device's; send it to the device language.
             bool has_lang = false;
@@ -265,23 +336,30 @@ void WifiConfigurationAp::StartWebServer()
     httpd_uri_t saved_list = {
         .uri = "/saved/list",
         .method = HTTP_GET,
-        .handler = [](httpd_req_t *req) -> esp_err_t {
-            auto ssid_list = SsidManager::GetInstance().GetSsidList();
-            std::string json_str = "[";
-            for (const auto& ssid : ssid_list) {
-                json_str += "\"" + ssid.ssid + "\",";
+        .handler = [](httpd_req_t* req) -> esp_err_t {
+            const std::unique_ptr<cJSON, decltype(&cJSON_Delete)> list(cJSON_CreateArray(),
+                                                                       cJSON_Delete);
+            if (!list) {
+                return httpd_resp_send_500(req);
             }
-            if (json_str.length() > 1) {
-                json_str.pop_back(); // Remove the last comma
+            for (const auto& item : SsidManager::GetInstance().GetSsidList()) {
+                auto* ssid = cJSON_CreateString(item.ssid.c_str());
+                if (!ssid || !cJSON_AddItemToArray(list.get(), ssid)) {
+                    cJSON_Delete(ssid);
+                    return httpd_resp_send_500(req);
+                }
             }
-            json_str += "]";
+            const std::unique_ptr<char, decltype(&cJSON_free)> data(
+                cJSON_PrintUnformatted(list.get()), cJSON_free);
+            if (!data) {
+                return httpd_resp_send_500(req);
+            }
             httpd_resp_set_type(req, "application/json");
             httpd_resp_set_hdr(req, "Connection", "close");
-            httpd_resp_send(req, json_str.c_str(), HTTPD_RESP_USE_STRLEN);
+            httpd_resp_sendstr(req, data.get());
             return ESP_OK;
         },
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server_, &saved_list));
 
     // Register the /saved/set_default URI
@@ -295,7 +373,10 @@ void WifiConfigurationAp::StartWebServer()
                 int index = -1;
                 sscanf(&req->uri[pos+7], "%d", &index);
                 ESP_LOGI(TAG, "Set default item %d", index);
-                SsidManager::GetInstance().SetDefaultSsid(index);
+                if (!SsidManager::GetInstance().SetDefaultSsid(index)) {
+                    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                               "Could not update saved Wi-Fi");
+                }
             }
             // send {}
             httpd_resp_set_type(req, "application/json");
@@ -318,7 +399,10 @@ void WifiConfigurationAp::StartWebServer()
                 int index = -1;
                 sscanf(&req->uri[pos+7], "%d", &index);
                 ESP_LOGI(TAG, "Delete saved list item %d", index);
-                SsidManager::GetInstance().RemoveSsid(index);
+                if (!SsidManager::GetInstance().RemoveSsid(index)) {
+                    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                               "Could not update saved Wi-Fi");
+                }
             }
             // send {}
             httpd_resp_set_type(req, "application/json");
@@ -349,17 +433,34 @@ void WifiConfigurationAp::StartWebServer()
             httpd_resp_set_hdr(req, "Connection", "close");
             httpd_resp_sendstr_chunk(req, "{\"support_5g\":");
             httpd_resp_sendstr_chunk(req, support_5g ? "true" : "false");
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+            httpd_resp_sendstr_chunk(req, ",\"supports_peap\":true");
+#endif
             httpd_resp_sendstr_chunk(req, ",\"aps\":[");
-            for (int i = 0; i < this_->ap_records_.size(); i++) {
-                ESP_LOGI(TAG, "SSID: %s, RSSI: %d, Authmode: %d",
-                    (char *)this_->ap_records_[i].ssid, this_->ap_records_[i].rssi, this_->ap_records_[i].authmode);
-                char buf[128];
-                snprintf(buf, sizeof(buf), "{\"ssid\":\"%s\",\"rssi\":%d,\"authmode\":%d}",
-                    (char *)this_->ap_records_[i].ssid, this_->ap_records_[i].rssi, this_->ap_records_[i].authmode);
-                httpd_resp_sendstr_chunk(req, buf);
-                if (i < this_->ap_records_.size() - 1) {
+            bool first = true;
+            for (const auto& ap : this_->ap_records_) {
+                const std::unique_ptr<cJSON, decltype(&cJSON_Delete)> item(cJSON_CreateObject(),
+                                                                           cJSON_Delete);
+                if (!item ||
+                    !cJSON_AddStringToObject(item.get(), "ssid",
+                                             reinterpret_cast<const char*>(ap.ssid)) ||
+                    !cJSON_AddNumberToObject(item.get(), "rssi", ap.rssi) ||
+                    !cJSON_AddNumberToObject(item.get(), "authmode", ap.authmode) ||
+                    !cJSON_AddBoolToObject(item.get(), "enterprise",
+                                           IsEnterpriseAuth(ap.authmode)) ||
+                    !cJSON_AddBoolToObject(item.get(), "peap", IsPeapAuth(ap.authmode))) {
+                    continue;
+                }
+                const std::unique_ptr<char, decltype(&cJSON_free)> data(
+                    cJSON_PrintUnformatted(item.get()), cJSON_free);
+                if (!data) {
+                    continue;
+                }
+                if (!first) {
                     httpd_resp_sendstr_chunk(req, ",");
                 }
+                first = false;
+                httpd_resp_sendstr_chunk(req, data.get());
             }
             httpd_resp_sendstr_chunk(req, "]}");
             httpd_resp_sendstr_chunk(req, NULL);
@@ -373,73 +474,81 @@ void WifiConfigurationAp::StartWebServer()
     httpd_uri_t form_submit = {
         .uri = "/submit",
         .method = HTTP_POST,
-        .handler = [](httpd_req_t *req) -> esp_err_t {
-            char *buf;
-            size_t buf_len = req->content_len;
-            if (buf_len > 1024) { // 限制最大请求体大小
-                httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Payload too large");
-                return ESP_FAIL;
+        .handler = [](httpd_req_t* req) -> esp_err_t {
+#ifdef CONFIG_ESP_WIFI_CONNECT_PEAP
+            // Require a JSON POST so a cross-origin HTML form cannot submit credentials.
+            char content_type[32];
+            if (httpd_req_get_hdr_value_str(req, "Content-Type", content_type,
+                                            sizeof(content_type)) != ESP_OK ||
+                std::strcmp(content_type, "application/json") != 0) {
+                return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Expected JSON");
             }
-
-            buf = (char *)malloc(buf_len + 1);
-            if (!buf) {
-                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate memory");
-                return ESP_FAIL;
+            constexpr size_t kMaxBodySize = 6144;
+#else
+            constexpr size_t kMaxBodySize = 1024;
+#endif
+            if (req->content_len == 0 || req->content_len > kMaxBodySize) {
+                return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid payload size");
             }
-
-            int ret = httpd_req_recv(req, buf, buf_len);
-            if (ret <= 0) {
-                free(buf);
-                if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-                    httpd_resp_send_408(req);
-                } else {
-                    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive request");
+            std::string body(req->content_len + 1, '\0');
+            for (size_t offset = 0; offset < req->content_len;) {
+                const int received =
+                    httpd_req_recv(req, body.data() + offset, req->content_len - offset);
+                if (received <= 0) {
+                    return received == HTTPD_SOCK_ERR_TIMEOUT
+                               ? httpd_resp_send_408(req)
+                               : httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                                     "Incomplete payload");
                 }
-                return ESP_FAIL;
+                offset += received;
             }
-            buf[ret] = '\0';
-
-            // 解析 JSON 数据
-            cJSON *json = cJSON_Parse(buf);
-            free(buf);
-            if (!json) {
-                httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-                return ESP_FAIL;
+            const std::unique_ptr<cJSON, decltype(&cJSON_Delete)> json(
+                cJSON_ParseWithLengthOpts(body.data(), body.size(), nullptr, true), cJSON_Delete);
+            if (!cJSON_IsObject(json.get())) {
+                return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
             }
 
-            cJSON *ssid_item = cJSON_GetObjectItemCaseSensitive(json, "ssid");
-            cJSON *password_item = cJSON_GetObjectItemCaseSensitive(json, "password");
-
-            if (!cJSON_IsString(ssid_item) || (ssid_item->valuestring == NULL) || (strlen(ssid_item->valuestring) >= 33)) {
-                cJSON_Delete(json);
-                httpd_resp_send(req, "{\"success\":false,\"error\":\"Invalid SSID\"}", HTTPD_RESP_USE_STRLEN);
-                return ESP_OK;
-            }
-
-            std::string ssid_str = ssid_item->valuestring;
-            std::string password_str = "";
-            if (cJSON_IsString(password_item) && (password_item->valuestring != NULL) && (strlen(password_item->valuestring) < 65)) {
-                password_str = password_item->valuestring;
-            }
-
-            // 获取当前对象
-            auto *this_ = static_cast<WifiConfigurationAp *>(req->user_ctx);
-            if (!this_->ConnectToWifi(ssid_str, password_str)) {
-                cJSON_Delete(json);
-                httpd_resp_send(req, "{\"success\":false,\"error\":\"Failed to connect to the Access Point\"}", HTTPD_RESP_USE_STRLEN);
-                return ESP_OK;
-            }
-
-            this_->Save(ssid_str, password_str);
-            cJSON_Delete(json);
-            // 设置成功响应
             httpd_resp_set_type(req, "application/json");
+            httpd_resp_set_hdr(req, "Cache-Control", "no-store");
             httpd_resp_set_hdr(req, "Connection", "close");
+            const auto* ssid =
+                cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(json.get(), "ssid"));
+            const auto* password =
+                cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(json.get(), "password"));
+            const auto* enterprise = cJSON_GetObjectItemCaseSensitive(json.get(), "peap");
+            if (!ssid || !*ssid || std::strlen(ssid) > 32 ||
+                (!enterprise && password && std::strlen(password) > 64)) {
+                return httpd_resp_sendstr(req,
+                                          "{\"success\":false,\"error\":\"invalid_credentials\"}");
+            }
+            auto* self = static_cast<WifiConfigurationAp*>(req->user_ctx);
+            PeapProfile peap;
+            if (enterprise) {
+                if (self->ap_password_.empty() || !(peap = ReadPeapProfile(enterprise))) {
+                    return httpd_resp_sendstr(
+                        req, "{\"success\":false,\"error\":\"invalid_enterprise\"}");
+                }
+                const auto aps = self->GetAccessPoints();
+                const bool found = std::any_of(aps.begin(), aps.end(), [ssid](const auto& ap) {
+                    return std::strcmp(reinterpret_cast<const char*>(ap.ssid), ssid) == 0 &&
+                           IsPeapAuth(ap.authmode);
+                });
+                if (!found) {
+                    return httpd_resp_sendstr(
+                        req, "{\"success\":false,\"error\":\"unsupported_enterprise\"}");
+                }
+            }
+            const std::string psk = !peap && password ? password : "";
+            if (!self->ConnectToWifi(ssid, psk, peap)) {
+                return httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"connect_failed\"}");
+            }
+            if (!self->Save(ssid, psk, peap)) {
+                return httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"save_failed\"}");
+            }
             httpd_resp_send(req, "{\"success\":true}", HTTPD_RESP_USE_STRLEN);
             return ESP_OK;
         },
-        .user_ctx = this
-    };
+        .user_ctx = this};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server_, &form_submit));
 
     // Register the exit endpoint - exits config mode without rebooting
@@ -448,20 +557,20 @@ void WifiConfigurationAp::StartWebServer()
         .method = HTTP_POST,
         .handler = [](httpd_req_t *req) -> esp_err_t {
             auto* this_ = static_cast<WifiConfigurationAp*>(req->user_ctx);
-            
+
             // 设置响应头，防止浏览器缓存
             httpd_resp_set_type(req, "application/json");
             httpd_resp_set_hdr(req, "Cache-Control", "no-store");
             httpd_resp_set_hdr(req, "Connection", "close");
             // 发送响应
             httpd_resp_send(req, "{\"success\":true}", HTTPD_RESP_USE_STRLEN);
-            
+
             // 延迟调用回调，确保HTTP响应完全发送
             ESP_LOGI(TAG, "Exiting config mode...");
             xTaskCreate([](void *ctx) {
                 // 等待200ms确保HTTP响应完全发送
                 vTaskDelay(pdMS_TO_TICKS(200));
-                
+
                 auto* self = static_cast<WifiConfigurationAp*>(ctx);
                 // 通知回调退出配网模式
                 if (self->on_exit_requested_) {
@@ -469,7 +578,7 @@ void WifiConfigurationAp::StartWebServer()
                 }
                 vTaskDelete(NULL);
             }, "exit_config_task", 4096, this_, 5, NULL);
-            
+
             return ESP_OK;
         },
         .user_ctx = this
@@ -520,7 +629,7 @@ void WifiConfigurationAp::StartWebServer()
         .handler = [](httpd_req_t *req) -> esp_err_t {
             // 获取当前对象
             auto *this_ = static_cast<WifiConfigurationAp *>(req->user_ctx);
-            
+
             // 创建JSON对象
             cJSON *json = cJSON_CreateObject();
             if (!json) {
@@ -678,13 +787,13 @@ void WifiConfigurationAp::StartWebServer()
     ESP_LOGI(TAG, "Web server started");
 }
 
-bool WifiConfigurationAp::ConnectToWifi(const std::string &ssid, const std::string &password)
-{
+bool WifiConfigurationAp::ConnectToWifi(const std::string& ssid, const std::string& password,
+                                        const PeapProfile& peap) {
     if (ssid.empty()) {
         ESP_LOGE(TAG, "SSID cannot be empty");
         return false;
     }
-    
+
     if (ssid.length() > 32) {  // WiFi SSID 最大长度
         ESP_LOGE(TAG, "SSID too long");
         return false;
@@ -694,7 +803,7 @@ bool WifiConfigurationAp::ConnectToWifi(const std::string &ssid, const std::stri
         ESP_LOGE(TAG, "Password too long");
         return false;
     }
-    
+
     is_connecting_ = true;
     last_connected_channel_ = 0;
 
@@ -748,16 +857,15 @@ bool WifiConfigurationAp::ConnectToWifi(const std::string &ssid, const std::stri
         }
         memcpy(wifi_config.sta.ssid, ssid.data(), ssid_len);
 
-        size_t password_len = password.size();
-        if (password_len > sizeof(wifi_config.sta.password)) {
-            password_len = sizeof(wifi_config.sta.password);
-        }
-        memcpy(wifi_config.sta.password, password.data(), password_len);
         wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
         wifi_config.sta.failure_retry_cnt = 1;
 
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-        auto ret = esp_wifi_connect();
+        auto ret = ConfigureWifiCredentials(wifi_config, password, peap);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Could not configure Wi-Fi credentials: %s", esp_err_to_name(ret));
+            break;
+        }
+        ret = esp_wifi_connect();
         if (ret != ESP_OK) {
             ESP_LOGE(TAG,
                 "esp_wifi_connect failed: %d (attempt %d/%d)",
@@ -776,7 +884,7 @@ bool WifiConfigurationAp::ConnectToWifi(const std::string &ssid, const std::stri
 #ifdef CONFIG_SOC_WIFI_SUPPORT_5G
             pdMS_TO_TICKS(25000)
 #else
-            pdMS_TO_TICKS(10000)
+                                pdMS_TO_TICKS(peap ? 20000 : 10000)
 #endif
         );
 
@@ -802,26 +910,29 @@ bool WifiConfigurationAp::ConnectToWifi(const std::string &ssid, const std::stri
                 attempt < kMaxAttempts ? " — will retry" : "");
         }
     }
-    is_connecting_ = false;
-
     if (connected) {
-        wifi_ap_record_t ap_info;
-        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        wifi_ap_record_t ap_info{};
+        const auto ap_result = esp_wifi_sta_get_ap_info(&ap_info);
+        if (peap && (ap_result != ESP_OK || !IsPeapAuth(ap_info.authmode))) {
+            connected = false;
+        }
+        if (ap_result == ESP_OK) {
             last_connected_channel_ = ap_info.primary;
         }
-        ESP_LOGI(TAG, "Connected to WiFi %s, channel %u", ssid.c_str(), last_connected_channel_);
         esp_wifi_disconnect();
-        return true;
-    } else {
-        ESP_LOGE(TAG,
-            "Failed to connect to WiFi %s after %d attempts",
-            ssid.c_str(), kMaxAttempts);
-        return false;
     }
+    if (connected) {
+        ESP_LOGI(TAG, "Connected to WiFi %s, channel %u", ssid.c_str(), last_connected_channel_);
+    } else {
+        ESP_LOGW(TAG, "Could not connect to WiFi %s", ssid.c_str());
+    }
+    ResetWifiEnterprise();
+    is_connecting_ = false;
+    return connected;
 }
 
-void WifiConfigurationAp::Save(const std::string &ssid, const std::string &password)
-{
+bool WifiConfigurationAp::Save(const std::string& ssid, const std::string& password,
+                               const PeapProfile& peap) {
     uint8_t channel = last_connected_channel_;
     if (channel == 0) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -833,7 +944,7 @@ void WifiConfigurationAp::Save(const std::string &ssid, const std::string &passw
         }
     }
     ESP_LOGI(TAG, "Save SSID %s channel %u", ssid.c_str(), channel);
-    SsidManager::GetInstance().AddSsid(ssid, password, channel);
+    return SsidManager::GetInstance().AddSsid(ssid, password, channel, peap);
 }
 
 void WifiConfigurationAp::OnExitRequested(std::function<void()> callback)
@@ -915,7 +1026,7 @@ void WifiConfigurationAp::SmartConfigEventHandler(void *arg, esp_event_base_t ev
             char password[65] = {0};
             memcpy(ssid, evt->ssid, sizeof(evt->ssid));
             memcpy(password, evt->password, sizeof(evt->password));
-            ESP_LOGI(TAG, "SmartConfig SSID: %s, Password: %s", ssid, password);
+            ESP_LOGI(TAG, "SmartConfig SSID: %s", ssid);
             // 尝试连接WiFi会失败，故不连接
             self->Save(ssid, password);
             // 延迟退出配网模式
@@ -979,8 +1090,10 @@ void WifiConfigurationAp::Stop() {
     }
 
     // 停止WiFi（但不 deinit，WiFi 驱动由 WifiManager 管理）
+    ResetWifiEnterprise();
     esp_wifi_stop();
-    
+    ap_password_.clear();
+
     // 销毁网络接口
     if (ap_netif_) {
         esp_netif_destroy_default_wifi(ap_netif_);

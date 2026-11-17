@@ -1,38 +1,13 @@
-message("78/esp_wifi_connect: IDF_VERSION_MAJOR is ${IDF_VERSION_MAJOR}")
-
-if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
-    # v6
-    message("78/esp_wifi_connect: idf_component_register for v6 used")
-
-    idf_component_register(
-        SRCS
-            "wifi_manager.cc"
-            "wifi_configuration_ap.cc"
-            "wifi_station.cc"
-            "ssid_manager.cc"
-            "dns_server.cc"
-        INCLUDE_DIRS
-            "include"
-        EMBED_TXTFILES
-            "assets/wifi_configuration.html"
-        REQUIRES "esp_timer" "esp_http_server" "esp_wifi" "nvs_flash"
-    )
-else()
-    # v5
-    message("78/esp_wifi_connect: idf_component_register for v5 used")
-
-    idf_component_register(
-        SRCS
-            "wifi_manager.cc"
-            "wifi_configuration_ap.cc"
-            "wifi_station.cc"
-            "ssid_manager.cc"
-            "dns_server.cc"
-        INCLUDE_DIRS
-            "include"
-        EMBED_TXTFILES
-            "assets/wifi_configuration.html"
-        REQUIRES "esp_timer" "esp_http_server" "esp_wifi" "nvs_flash" "json"
-    )
+set(public_requirements esp_timer esp_http_server esp_wifi nvs_flash)
+if(IDF_VERSION_MAJOR LESS 6)
+    list(APPEND public_requirements json)
 endif()
 
+idf_component_register(
+    SRCS "wifi_manager.cc" "wifi_configuration_ap.cc" "wifi_station.cc"
+         "ssid_manager.cc" "dns_server.cc" "wifi_credentials.cc"
+    INCLUDE_DIRS "include"
+    EMBED_TXTFILES "assets/wifi_configuration.html"
+    REQUIRES ${public_requirements}
+    PRIV_REQUIRES esp_hw_support wpa_supplicant mbedtls
+)

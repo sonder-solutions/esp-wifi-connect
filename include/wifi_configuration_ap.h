@@ -1,24 +1,26 @@
 #ifndef _WIFI_CONFIGURATION_AP_H_
 #define _WIFI_CONFIGURATION_AP_H_
 
+#include <atomic>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
-#include <mutex>
-#include <memory>
-#include <functional>
 
-#include <esp_http_server.h>
 #include <esp_event.h>
-#include <esp_timer.h>
+#include <esp_http_server.h>
 #include <esp_netif.h>
+#include <esp_timer.h>
 #include <esp_wifi_types_generic.h>
 
 #include "dns_server.h"
 #include "sdkconfig.h"
+#include "wifi_credentials.h"
 
 /**
  * WifiConfigurationAp - WiFi configuration access point
- * 
+ *
  * Creates a WiFi hotspot with a captive portal for configuring WiFi credentials.
  * Note: WiFi driver must be initialized before using this class.
  */
@@ -42,10 +44,12 @@ public:
 #if !CONFIG_IDF_TARGET_ESP32P4
     void StartSmartConfig();
 #endif
-    bool ConnectToWifi(const std::string &ssid, const std::string &password);
-    void Save(const std::string &ssid, const std::string &password);
+    bool ConnectToWifi(const std::string& ssid, const std::string& password,
+                       const PeapProfile& peap = {});
+    bool Save(const std::string& ssid, const std::string& password, const PeapProfile& peap = {});
     std::vector<wifi_ap_record_t> GetAccessPoints();
     std::string GetSsid();
+    const std::string& GetPassword() const { return ap_password_; }
     std::string GetWebServerUrl();
 
     /**
@@ -64,8 +68,9 @@ private:
     esp_event_handler_instance_t instance_any_id_;
     esp_event_handler_instance_t instance_got_ip_;
     esp_timer_handle_t scan_timer_ = nullptr;
-    bool is_connecting_ = false;
+    std::atomic<bool> is_connecting_{false};
     esp_netif_t* ap_netif_ = nullptr;
+    std::string ap_password_;
     std::vector<wifi_ap_record_t> ap_records_;
     uint8_t last_connected_channel_ = 0;
 
@@ -87,7 +92,7 @@ private:
     static void WifiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
     static void IpEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 #if !CONFIG_IDF_TARGET_ESP32P4
-    static void SmartConfigEventHandler(void* arg, esp_event_base_t event_base, 
+    static void SmartConfigEventHandler(void* arg, esp_event_base_t event_base,
                                       int32_t event_id, void* event_data);
     esp_event_handler_instance_t sc_event_instance_ = nullptr;
 #endif

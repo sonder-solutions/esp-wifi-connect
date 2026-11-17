@@ -57,7 +57,7 @@ void WifiStation::AddAuth(const std::string &&ssid, const std::string &&password
 
 void WifiStation::Stop() {
     ESP_LOGI(TAG, "Stopping WiFi station");
-    
+
     // Unregister event handlers FIRST to prevent scan done from triggering connect
     if (instance_any_id_ != nullptr) {
         esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id_);
@@ -78,19 +78,20 @@ void WifiStation::Stop() {
     // Now safe to stop scan, disconnect and stop WiFi (no event callbacks will fire)
     esp_wifi_scan_stop();
     esp_wifi_disconnect();
+    ResetWifiEnterprise();
     esp_wifi_stop();
 
     if (station_netif_ != nullptr) {
         esp_netif_destroy_default_wifi(station_netif_);
         station_netif_ = nullptr;
     }
-    
+
     // Reset was_connected_ flag to prevent stale state from affecting subsequent sessions
     was_connected_ = false;
 
     // Clear connected bit
     xEventGroupClearBits(event_group_, WIFI_EVENT_CONNECTED);
-    
+
     // Set stopped event AFTER cleanup is complete to unblock WaitForConnected
     // This ensures no race condition with subsequent WiFi operations
     xEventGroupSetBits(event_group_, WIFI_EVENT_STOPPED);
@@ -115,13 +116,13 @@ void WifiStation::OnDisconnected(std::function<void(int reason)> on_disconnected
 void WifiStation::Start() {
     // Note: esp_netif_init() and esp_wifi_init() should be called once before calling this method
     // WiFi driver is initialized by WifiManager::Initialize() and kept alive
-    
+
     // Clear stopped event bit so WaitForConnected works properly
     // Clear scan done bit so Stop() can wait for scan to complete
     xEventGroupClearBits(event_group_, WIFI_EVENT_STOPPED | WIFI_EVENT_SCAN_DONE_BIT);
     use_saved_channels_scan_ = true;
     last_scan_used_saved_channels_ = false;
-    
+
     // Create the default WiFi station interface
     station_netif_ = esp_netif_create_default_wifi_sta();
     if (!hostname_.empty()) {
@@ -170,7 +171,7 @@ void WifiStation::Start() {
 
 bool WifiStation::WaitForConnected(int timeout_ms) {
     // Wait for either connected or stopped event
-    auto bits = xEventGroupWaitBits(event_group_, WIFI_EVENT_CONNECTED | WIFI_EVENT_STOPPED, 
+    auto bits = xEventGroupWaitBits(event_group_, WIFI_EVENT_CONNECTED | WIFI_EVENT_STOPPED,
                                     pdFALSE, pdFALSE, timeout_ms / portTICK_PERIOD_MS);
     // Return true only if connected (not if stopped)
     return (bits & WIFI_EVENT_CONNECTED) != 0;
@@ -238,22 +239,23 @@ void WifiStation::HandleScanResult() {
     auto ssid_list = ssid_manager.GetSsidList();
     for (int i = 0; i < ap_num; i++) {
         auto ap_record = ap_records[i];
-        auto it = std::find_if(ssid_list.begin(), ssid_list.end(), [ap_record](const SsidItem& item) {
-            return strcmp((char *)ap_record.ssid, item.ssid.c_str()) == 0;
-        });
+        auto it =
+            std::find_if(ssid_list.begin(), ssid_list.end(), [ap_record](const SsidItem& item) {
+                return strcmp((char*)ap_record.ssid, item.ssid.c_str()) == 0 &&
+                       (item.peap ? IsPeapAuth(ap_record.authmode)
+                                  : !IsEnterpriseAuth(ap_record.authmode));
+            });
         if (it != ssid_list.end()) {
             ESP_LOGI(TAG, "Found AP: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, RSSI: %d, Channel: %d, Authmode: %d",
-                (char *)ap_record.ssid, 
+                (char *)ap_record.ssid,
                 ap_record.bssid[0], ap_record.bssid[1], ap_record.bssid[2],
                 ap_record.bssid[3], ap_record.bssid[4], ap_record.bssid[5],
                 ap_record.rssi, ap_record.primary, ap_record.authmode);
-            WifiApRecord record = {
-                .ssid = it->ssid,
-                .password = it->password,
-                .channel = ap_record.primary,
-                .authmode = ap_record.authmode,
-                .bssid = {0}
-            };
+            WifiApRecord record = {.ssid = it->ssid,
+                                   .password = it->password,
+                                   .channel = ap_record.primary,
+                                   .peap = it->peap,
+                                   .bssid = {0}};
             memcpy(record.bssid, ap_record.bssid, 6);
             connect_queue_.push_back(record);
         }
@@ -278,57 +280,59 @@ void WifiStation::HandleScanResult() {
 }
 
 void WifiStation::StartConnect() {
-    auto ap_record = connect_queue_.front();
-    connect_queue_.erase(connect_queue_.begin());
-    ssid_ = ap_record.ssid;
-    password_ = ap_record.password;
+    while (!connect_queue_.empty()) {
+        auto ap_record = std::move(connect_queue_.front());
+        connect_queue_.erase(connect_queue_.begin());
+        ssid_ = ap_record.ssid;
 
-    if (on_connect_) {
-        on_connect_(ssid_);
+        if (on_connect_) {
+            on_connect_(ssid_);
+        }
+
+        wifi_config_t wifi_config;
+        bzero(&wifi_config, sizeof(wifi_config));
+        size_t ssid_len = ap_record.ssid.size();
+        if (ssid_len > sizeof(wifi_config.sta.ssid)) {
+            ssid_len = sizeof(wifi_config.sta.ssid);
+        }
+        memcpy(wifi_config.sta.ssid, ap_record.ssid.data(), ssid_len);
+
+        if (ap_record.channel != 0) {
+            // We just found this AP; start on its channel instead of scanning all.
+            wifi_config.sta.channel = ap_record.channel;
+        }
+
+        if (remember_bssid_) {
+            // Explicit opt-in: pin to this exact AP (BSSID + channel) for the fastest
+            // reconnect. This intentionally disables roaming between same-SSID APs.
+            memcpy(wifi_config.sta.bssid, ap_record.bssid, 6);
+            wifi_config.sta.bssid_set = true;
+        } else if (ap_record.channel == 0) {
+            // Channel unknown: ask the driver to scan every channel and connect to
+            // the same-SSID AP with the strongest signal.
+            wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+            wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+            wifi_config.sta.failure_retry_cnt = failure_retry_cnt_;
+        } else {
+            // Channel is already known from our scan. Use a fast scan on that
+            // channel so connect does not walk the whole band again.
+            wifi_config.sta.scan_method = WIFI_FAST_SCAN;
+            wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+            wifi_config.sta.failure_retry_cnt = failure_retry_cnt_;
+        }
+        wifi_config.sta.listen_interval = 10;
+        auto err = ConfigureWifiCredentials(wifi_config, ap_record.password, ap_record.peap);
+        if (err == ESP_OK) {
+            reconnect_count_ = 0;
+            err = esp_wifi_connect();
+            if (err == ESP_OK) {
+                return;
+            }
+        }
+        ESP_LOGW(TAG, "Could not start Wi-Fi connection: %s", esp_err_to_name(err));
     }
-
-    wifi_config_t wifi_config;
-    bzero(&wifi_config, sizeof(wifi_config));
-    size_t ssid_len = ap_record.ssid.size();
-    if (ssid_len > sizeof(wifi_config.sta.ssid)) {
-        ssid_len = sizeof(wifi_config.sta.ssid);
-    }
-    memcpy(wifi_config.sta.ssid, ap_record.ssid.data(), ssid_len);
-
-    size_t password_len = ap_record.password.size();
-    if (password_len > sizeof(wifi_config.sta.password)) {
-        password_len = sizeof(wifi_config.sta.password);
-    }
-    memcpy(wifi_config.sta.password, ap_record.password.data(), password_len);
-
-    if (ap_record.channel != 0) {
-        // We just found this AP; start on its channel instead of scanning all.
-        wifi_config.sta.channel = ap_record.channel;
-    }
-
-    if (remember_bssid_) {
-        // Explicit opt-in: pin to this exact AP (BSSID + channel) for the fastest
-        // reconnect. This intentionally disables roaming between same-SSID APs.
-        memcpy(wifi_config.sta.bssid, ap_record.bssid, 6);
-        wifi_config.sta.bssid_set = true;
-    } else if (ap_record.channel == 0) {
-        // Channel unknown: ask the driver to scan every channel and connect to
-        // the same-SSID AP with the strongest signal.
-        wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-        wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
-        wifi_config.sta.failure_retry_cnt = failure_retry_cnt_;
-    } else {
-        // Channel is already known from our scan. Use a fast scan on that
-        // channel so connect does not walk the whole band again.
-        wifi_config.sta.scan_method = WIFI_FAST_SCAN;
-        wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
-        wifi_config.sta.failure_retry_cnt = failure_retry_cnt_;
-    }
-    wifi_config.sta.listen_interval = 10;
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-
-    reconnect_count_ = 0;
-    ESP_ERROR_CHECK(esp_wifi_connect());
+    esp_timer_start_once(timer_handle_, scan_current_interval_microseconds_);
+    UpdateScanInterval();
 }
 
 int8_t WifiStation::GetRssi() {
@@ -336,7 +340,7 @@ int8_t WifiStation::GetRssi() {
     if (!IsConnected()) {
         return 0;  // Return 0 if not connected
     }
-    
+
     // Get station info
     wifi_ap_record_t ap_info;
     esp_err_t err = esp_wifi_sta_get_ap_info(&ap_info);
@@ -352,7 +356,7 @@ uint8_t WifiStation::GetChannel() {
     if (!IsConnected()) {
         return 0;  // Return 0 if not connected
     }
-    
+
     // Get station info
     wifi_ap_record_t ap_info;
     esp_err_t err = esp_wifi_sta_get_ap_info(&ap_info);
@@ -417,7 +421,7 @@ void WifiStation::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
         this_->HandleScanResult();
     } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(this_->event_group_, WIFI_EVENT_CONNECTED);
-        
+
         // Notify disconnected callback only once when transitioning from connected to disconnected
         bool was_connected = this_->was_connected_;
         this_->was_connected_ = false;
@@ -426,7 +430,7 @@ void WifiStation::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
         if (was_connected && this_->on_disconnected_) {
             this_->on_disconnected_(event->reason);
         }
-        
+
         if (this_->reconnect_count_ < MAX_RECONNECT_COUNT) {
             esp_wifi_connect();
             this_->reconnect_count_++;
@@ -438,8 +442,8 @@ void WifiStation::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
             this_->StartConnect();
             return;
         }
-        
-        ESP_LOGI(TAG, "No more AP to connect, next scan in %d seconds", 
+
+        ESP_LOGI(TAG, "No more AP to connect, next scan in %d seconds",
                  this_->scan_current_interval_microseconds_ / 1000 / 1000);
         esp_timer_start_once(this_->timer_handle_, this_->scan_current_interval_microseconds_);
         this_->UpdateScanInterval();
@@ -455,7 +459,7 @@ void WifiStation::IpEventHandler(void* arg, esp_event_base_t event_base, int32_t
     esp_ip4addr_ntoa(&event->ip_info.ip, ip_address, sizeof(ip_address));
     this_->ip_address_ = ip_address;
     ESP_LOGI(TAG, "Got IP: %s", this_->ip_address_.c_str());
-    
+
     xEventGroupSetBits(this_->event_group_, WIFI_EVENT_CONNECTED);
     this_->was_connected_ = true;  // Mark as connected for disconnect notification
     if (this_->on_connected_) {

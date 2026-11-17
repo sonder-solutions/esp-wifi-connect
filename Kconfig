@@ -1,0 +1,7 @@
+config ESP_WIFI_CONNECT_PEAP
+    bool
+    select ESP_WIFI_ENTERPRISE_SUPPORT
+    select ESP_WIFI_MBEDTLS_TLS_CLIENT
+    help
+        Select this from an application running ESP-IDF 6.0.1 or later
+        that can present the protected setup hotspot credentials locally.

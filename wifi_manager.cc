@@ -49,7 +49,7 @@ void WifiManager::NotifyEvent(WifiEvent event, const std::string& data) {
 
 bool WifiManager::Initialize(const WifiManagerConfig& config) {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     if (initialized_) {
         ESP_LOGW(TAG, "Already initialized");
         return true;
@@ -289,6 +289,14 @@ std::string WifiManager::GetApSsid() const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!config_mode_active_ || !config_ap_) return "";
     return config_ap_->GetSsid();
+}
+
+std::pair<std::string, std::string> WifiManager::GetApCredentials() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!config_mode_active_) {
+        return {};
+    }
+    return {config_ap_->GetSsid(), config_ap_->GetPassword()};
 }
 
 std::string WifiManager::GetApWebUrl() const {

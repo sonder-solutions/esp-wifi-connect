@@ -152,3 +152,17 @@ if (ssid_list.empty()) {
 ```
 
 Please check https://github.com/78/xiaozhi-esp32 for more usage.
+
+## WPA2-Enterprise setup
+
+Applications on ESP-IDF 6.0.1 or later can select the component's
+`ESP_WIFI_CONNECT_PEAP` Kconfig option. Present the SSID and per-session WPA2
+password from `WifiManager::GetApCredentials()` locally, for example in a
+Wi-Fi QR code. The portal then accepts PEAP/MSCHAPv2 profiles on supported
+networks. The user supplies the account, password and RADIUS server name.
+If the server uses a private CA, the user supplies its PEM certificate.
+An empty CA field uses the ESP-IDF certificate bundle, which the application
+must enable for public CA support.
+
+The component saves an authenticated profile in NVS for station reconnects.
+Applications configure NVS encryption if they require encrypted storage.

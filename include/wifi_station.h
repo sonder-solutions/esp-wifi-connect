@@ -10,6 +10,8 @@
 #include <esp_netif.h>
 #include <esp_wifi_types_generic.h>
 
+#include "wifi_credentials.h"
+
 // WiFi power save level enumeration
 enum class WifiPowerSaveLevel {
     LOW_POWER,    // Maximum power saving (WIFI_PS_MAX_MODEM)
@@ -21,13 +23,13 @@ struct WifiApRecord {
     std::string ssid;
     std::string password;
     int channel;
-    wifi_auth_mode_t authmode;
+    PeapProfile peap;
     uint8_t bssid[6];
 };
 
 /**
  * WifiStation - WiFi station mode handler
- * 
+ *
  * This class handles connecting to WiFi access points in station mode.
  * Note: WiFi driver must be initialized before using this class.
  */
@@ -71,7 +73,6 @@ private:
     esp_event_handler_instance_t instance_got_ip_ = nullptr;
     esp_netif_t* station_netif_ = nullptr;
     std::string ssid_;
-    std::string password_;
     std::string ip_address_;
     std::string hostname_;
     int8_t max_tx_power_;
